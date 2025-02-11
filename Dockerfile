@@ -29,7 +29,7 @@ RUN adduser --disabled-password --gecos '' appuser && chown -R appuser:appuser /
 USER appuser
 
 # Expose the port used by the Flask application (5001 as defined in app.py)
-EXPOSE 5001
+EXPOSE 8080
 
 # Use Gunicorn to run the application (assumes the Flask app object is defined in app:app)
-CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:5001", "app:app"]
+CMD ["gunicorn", "-w", "4", "-b", "0.0.0.0:8080", "app:app"]

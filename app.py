@@ -312,4 +312,4 @@ def download_midi():
 if __name__ == "__main__":
     # In production, it is recommended to run with a WSGI server such as Gunicorn.
     # For example: gunicorn -w 4 -b :$PORT app:app
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5001)), debug=False)
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), debug=False)
