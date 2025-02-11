@@ -1,0 +1,46 @@
+name: Deploy to Cloud Run
+
+on:
+  push:
+    branches:
+      - main  # main ブランチに push されたときに実行
+
+jobs:
+  build-and-deploy:
+    name: Build and Deploy to Cloud Run
+    runs-on: ubuntu-latest
+
+    steps:
+      # リポジトリのコードをチェックアウト
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      # Google Cloud SDK のセットアップと認証
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v1
+        with:
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      # Docker を GCP コンテナレジストリ向けに認証
+      - name: Configure Docker for Google Cloud
+        run: gcloud auth configure-docker
+
+      # Docker イメージのビルド
+      - name: Build Docker image
+        run: |
+          docker build -t gcr.io/${{ secrets.GCP_PROJECT_ID }}/midi-generation:${{ github.sha }} .
+
+      # Docker イメージのプッシュ
+      - name: Push Docker image
+        run: |
+          docker push gcr.io/${{ secrets.GCP_PROJECT_ID }}/midi-generation:${{ github.sha }}
+
+      # Cloud Run へのデプロイ
+      - name: Deploy to Cloud Run
+        run: |
+          gcloud run deploy midi-generation \
+            --image gcr.io/${{ secrets.GCP_PROJECT_ID }}/midi-generation:${{ github.sha }} \
+            --region ${{ secrets.GCP_REGION }} \
+            --platform managed \
+            --allow-unauthenticated
