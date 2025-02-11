@@ -1,31 +1,27 @@
 FROM python:3.12-slim
 
-# Install system dependencies required for Poetry and building packages.
+# 必要なシステムパッケージのインストール（Poetry やパッケージビルドに必要なもの）
 RUN apt-get update && apt-get install -y curl build-essential && rm -rf /var/lib/apt/lists/*
 
-# Install Poetry.
+# Poetry のインストール
 RUN curl -sSL https://install.python-poetry.org | python -
 ENV PATH="/root/.local/bin:$PATH"
 
-# Set the working directory.
+# 作業ディレクトリの設定
 WORKDIR /app
 
-# Copy pyproject.toml and (if available) poetry.lock to leverage Docker cache.
+# キャッシュを有効にするため、pyproject.toml と poetry.lock を先にコピー
 COPY pyproject.toml poetry.lock* /app/
 
-# Install dependencies via Poetry without creating a virtual environment.
+# 仮想環境を作成せずに Poetry 経由で依存パッケージをインストール
 RUN poetry config virtualenvs.create false && \
     poetry install --no-root --no-interaction --no-ansi
 
-# Copy the rest of the application source code.
+# アプリケーションのソースコードをコピー
 COPY . /app
 
-# Expose the port Streamlit will run on.
-EXPOSE 8501
+# Flask アプリケーションが使用するポート（app.py 内で 5001 番ポートを指定しているため）
+EXPOSE 5001
 
-# Set environment variables for Streamlit to run in headless mode.
-ENV STREAMLIT_SERVER_HEADLESS true
-ENV STREAMLIT_SERVER_PORT 8501
-
-# Start the Streamlit app.
-CMD ["streamlit", "run", "app.py", "--server.address", "0.0.0.0", "--server.enableCORS", "false"]
+# Flask アプリを起動
+CMD ["python", "app.py"]

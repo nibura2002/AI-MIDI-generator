@@ -7,7 +7,7 @@
 - I wanted an AI that could generate music materials in MIDI format, which are editable materials.
 
 ### Concept of the tool
-- MIDI generation tool with streamlit UI.
+- MIDI generation tool with Flask UI.
 - Use a LLM (currently openai GPT) to understand the image of the song.
 - Output python scrypt for midi generation based on the LLM interpretation of the song, also using a LLM.
 
@@ -25,21 +25,21 @@ This project uses Docker to containerize the application. Follow these steps to 
 
 2. **Run the Docker Container**
 
-   Once the image is built, run a container by mapping port 8501 (the port Streamlit uses) to your host's port 8501:
+   Once the image is built, run a container by mapping port 5001 (the port Flask uses) to your host's port 8501:
 
    ```bash
-   docker run --env-file .env -p 8501:8501 midi-generation
+   docker run --env-file .env -p 8501:5001 midi-generation
    ```
 
    Alternatively, you can specify each environment variable individually using the -e flag:
 
    ```bash
-   docker run -e OPENAI_API_KEY=your_api_key_here -p 8501:8501 midi-generation
+   docker run -e OPENAI_API_KEY=your_api_key_here -p 8501:5001 midi-generation
    ```
 
 3. **Access the Application**
 
-   Open your web browser and navigate to [http://localhost:8501](http://localhost:8501) to view the Streamlit app.
+   Open your web browser and navigate to [http://localhost:8501](http://localhost:8501) to view the Flask app.
 
 ### Using Environment Variables
 
