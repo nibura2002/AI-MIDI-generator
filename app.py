@@ -18,6 +18,7 @@ openai_api_key = os.getenv("OPENAI_API_KEY")
 if not openai_api_key:
     st.error("OPENAI_API_KEY is not set. Please set it in the .env file.")
 
+
 def strip_markdown_code(text: str) -> str:
     """
     Remove markdown code fences from the text.
@@ -27,7 +28,11 @@ def strip_markdown_code(text: str) -> str:
     text = re.sub(r"\n```$", "", text)
     return text
 
-def get_midi_info(midi_path: str, user_tempo: int, user_measure_count: int) -> str:
+
+def get_midi_info(
+        midi_path: str,
+        user_tempo: int,
+        user_measure_count: int) -> str:
     """
     Parse the MIDI file using mido and return a human-friendly summary.
     The summary includes:
@@ -54,9 +59,9 @@ def get_midi_info(midi_path: str, user_tempo: int, user_measure_count: int) -> s
         info_text += f"User Specified Number of Measures: {user_measure_count}\n"
         info_text += f"Total Length: {mid.length:.2f} seconds\n"
         info_text += f"Number of Tracks (Parts): {len(mid.tracks)}\n\n"
-        
+
         for i, track in enumerate(mid.tracks):
-            track_name = getattr(track, "name", "") or f"Part {i+1}"
+            track_name = getattr(track, "name", "") or f"Part {i + 1}"
             info_text += f"{track_name}:\n"
             note_on_count = sum(1 for msg in track if msg.type == "note_on")
             note_off_count = sum(1 for msg in track if msg.type == "note_off")
@@ -70,8 +75,10 @@ def get_midi_info(midi_path: str, user_tempo: int, user_measure_count: int) -> s
     except Exception as e:
         return f"Error reading MIDI file information: {e}"
 
+
 # Define a dictionary of genres and their additional details for MIDI generation.
-# These details are used only when generating the MIDI and not displayed on the UI.
+# These details are used only when generating the MIDI and not displayed
+# on the UI.
 genre_extra_details = {
     "Pop": "Typically features catchy melodies, simple chord progressions like I-V-vi-IV, and a clear, danceable rhythm.",
     "Rock": "Often uses power chords, a strong backbeat, and progressions such as I-IV-V. Electric guitar and drums are prominent.",
@@ -101,8 +108,8 @@ genre_extra_details = {
     "J-Pop": "Often includes bright melodies, eclectic influences, and polished production with standard pop progressions.",
     "EDM": "Utilizes electronic synthesizers, repetitive beats, and build-drop structures with energetic progressions.",
     "Indie": "Characterized by a mix of traditional and experimental sounds, often featuring unconventional chord progressions and rhythms.",
-    "Alternative": "Blends elements from various genres with varied chord progressions and eclectic rhythmic patterns."
-}
+    "Alternative": "Blends elements from various genres with varied chord progressions and eclectic rhythmic patterns."}
+
 
 def main():
     st.title("AI MIDI Generator")
@@ -116,10 +123,19 @@ def main():
     st.sidebar.header("Song Details")
     # Use a selectbox for Genre with predefined mainstream genres
     genre_options = list(genre_extra_details.keys())
-    genre = st.sidebar.selectbox("Genre", options=genre_options, index=genre_options.index("Pop"))
-    
-    tempo = st.sidebar.number_input("Tempo (BPM)", min_value=50, max_value=300, value=120)
-    key_center = st.sidebar.selectbox("Key", options=["C", "D", "E", "F", "G", "A", "B"])
+    genre = st.sidebar.selectbox(
+        "Genre",
+        options=genre_options,
+        index=genre_options.index("Pop"))
+
+    tempo = st.sidebar.number_input(
+        "Tempo (BPM)",
+        min_value=50,
+        max_value=300,
+        value=120)
+    key_center = st.sidebar.selectbox(
+        "Key", options=[
+            "C", "D", "E", "F", "G", "A", "B"])
     scale_type = st.sidebar.selectbox("Scale Type", options=["major", "minor"])
     mood = st.sidebar.text_input("Mood", value="Bright and upbeat")
     parts_info = st.sidebar.text_area(
@@ -130,15 +146,17 @@ def main():
         "Additional Details",
         value="Provide any additional details as needed."
     )
-    measure_count = st.sidebar.number_input("Number of Measures", min_value=1, max_value=100, value=16)
+    measure_count = st.sidebar.number_input(
+        "Number of Measures", min_value=1, max_value=100, value=16)
     beat_subdivision = st.sidebar.selectbox(
         "Main Beat Subdivision",
         options=["1/4", "1/8", "1/16", "3/4", "6/8"],
         index=0
     )
-    
+
     # Retrieve extra details based on the selected genre.
-    # This information is used only for MIDI generation and not displayed in the UI.
+    # This information is used only for MIDI generation and not displayed in
+    # the UI.
     extra_details = genre_extra_details.get(genre, "")
 
     # Define the prompt template. We've added a requirement to maintain coherent rhythmic feel
@@ -180,9 +198,9 @@ Requirements:
 4. Create a new MIDI file.
 5. Set the tempo using the provided BPM.
 6. Create MIDI tracks for each instrument part (for example, piano, bass, and drums).
-   For each instrument, create a new MidiTrack (e.g., piano_track = MidiTrack()) and append messages to that track. 
+   For each instrument, create a new MidiTrack (e.g., piano_track = MidiTrack()) and append messages to that track.
    Do not append individual MetaMessage objects directly to the file.
-7. Use consistent rhythmic subdivisions for all instruments so the overall feel is coherent. 
+7. Use consistent rhythmic subdivisions for all instruments so the overall feel is coherent.
    If using syncopations, make sure they align within each measure so the groove is tight.
 8. Use distinct channels and program changes for each track so that different instruments are recognized:
    - For example, channel 0 with program=0 for piano, channel 1 with program=32 for bass, and channel 9 for drums.
@@ -194,7 +212,7 @@ Requirements:
 Output only the complete Python code (without markdown code fences).
 """
     )
-    
+
     # Initialize ChatOpenAI
     llm = ChatOpenAI(
         model_name="gpt-4o",
@@ -218,19 +236,19 @@ Output only the complete Python code (without markdown code fences).
                 "measure_count": measure_count,
                 "beat_subdivision": beat_subdivision
             })
-        
+
         # Display generated code in an expandable section
         with st.expander("View Generated Code"):
             st.code(generated_code, language="python")
-        
+
         # Remove markdown code fences if present
         cleaned_code = strip_markdown_code(generated_code)
-        
+
         # Write the cleaned code to a temporary file and execute it
         with tempfile.NamedTemporaryFile(delete=False, suffix=".py") as tmp_file:
             tmp_file.write(cleaned_code.encode("utf-8"))
             tmp_file_name = tmp_file.name
-        
+
         try:
             output = subprocess.check_output(
                 ["python", tmp_file_name], stderr=subprocess.STDOUT)
@@ -254,11 +272,16 @@ Output only the complete Python code (without markdown code fences).
                 mime="audio/midi"
             )
             # Display a human-friendly summary of the MIDI file information
-            midi_info = get_midi_info(midi_file, user_tempo=tempo, user_measure_count=measure_count)
+            midi_info = get_midi_info(
+                midi_file,
+                user_tempo=tempo,
+                user_measure_count=measure_count)
             st.subheader("MIDI File Information")
             st.text_area("Details", value=midi_info, height=300)
         else:
-            st.error("MIDI file 'output.mid' was not found. Please check the generated code.")
+            st.error(
+                "MIDI file 'output.mid' was not found. Please check the generated code.")
+
 
 if __name__ == "__main__":
     main()
