@@ -106,6 +106,12 @@ genre_extra_details = {
 
 def main():
     st.title("AI MIDI Generator")
+    st.markdown(
+        """
+        This app generates MIDI file based on a song description.
+        You can specify the genre, tempo, key, scale type, mood, and other details to customize the song.
+        """
+    )
 
     st.sidebar.header("Song Details")
     # Use a selectbox for Genre with predefined mainstream genres
