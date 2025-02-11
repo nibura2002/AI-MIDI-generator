@@ -14,7 +14,6 @@ import streamlit.components.v1 as components
 # Load environment variables from the .env file
 load_dotenv()
 
-# Retrieve the API key from the environment
 openai_api_key = os.getenv("OPENAI_API_KEY")
 if not openai_api_key:
     st.error("OPENAI_API_KEY is not set. Please set it in the .env file.")
@@ -24,8 +23,8 @@ def strip_markdown_code(text: str) -> str:
     Remove markdown code fences from the text.
     For example, remove leading ```python and trailing ``` if present.
     """
-    text = re.sub(r"^```[^\n]*\n", "", text)  # Remove leading fence
-    text = re.sub(r"\n```$", "", text)          # Remove trailing fence
+    text = re.sub(r"^```[^\n]*\n", "", text)
+    text = re.sub(r"\n```$", "", text)
     return text
 
 def get_midi_info(midi_path: str, user_tempo: int, user_measure_count: int) -> str:
@@ -71,12 +70,48 @@ def get_midi_info(midi_path: str, user_tempo: int, user_measure_count: int) -> s
     except Exception as e:
         return f"Error reading MIDI file information: {e}"
 
+# Define a dictionary of genres and their additional details for MIDI generation.
+# These details are used only when generating the MIDI and not displayed on the UI.
+genre_extra_details = {
+    "Pop": "Typically features catchy melodies, simple chord progressions like I-V-vi-IV, and a clear, danceable rhythm.",
+    "Rock": "Often uses power chords, a strong backbeat, and progressions such as I-IV-V. Electric guitar and drums are prominent.",
+    "Hip Hop": "Features syncopated rhythms, sampled loops, and repetitive beats. Often uses minor scales and simple, repetitive chord patterns.",
+    "Jazz": "Characterized by complex chords, improvisation, swing rhythms, and extended harmonies like 7th and 9th chords.",
+    "Blues": "Utilizes the 12-bar blues progression, blue notes, and a soulful, expressive rhythm pattern.",
+    "Classical": "Employs rich harmonic progressions, counterpoint, and structured forms with traditional chord movements.",
+    "Electronic": "Often incorporates synthesized sounds, repetitive loops, and driving rhythms with modern production techniques.",
+    "Country": "Features simple chord progressions (I-IV-V), twangy melodies, and a steady, straightforward rhythm.",
+    "Reggae": "Uses off-beat rhythms, simple progressions, and a laid-back groove with emphasis on the backbeat.",
+    "Folk": "Characterized by acoustic instrumentation, simple chord structures, and a narrative lyrical quality.",
+    "Metal": "Often uses distorted guitars, aggressive rhythms, and complex, heavy chord progressions.",
+    "Soul": "Features expressive melodies, rich chord progressions, and smooth rhythms with an emphasis on groove.",
+    "R&B": "Incorporates smooth, soulful melodies, extended chords like 7ths and 9ths, and a laid-back, groovy rhythm.",
+    "Latin": "Characterized by rhythmic complexity, syncopated beats, and lively chord progressions influenced by Latin styles.",
+    "Punk": "Uses fast tempos, power chords, and simple, high-energy progressions with a raw, driving rhythm.",
+    "Disco": "Features steady four-on-the-floor beats, syncopated basslines, and catchy, repetitive chord progressions.",
+    "Funk": "Utilizes syncopated rhythms, groovy basslines, and extended chords with a strong emphasis on the downbeat.",
+    "House": "Characterized by repetitive 4/4 beats, synthesized basslines, and simple, driving chord progressions.",
+    "Techno": "Features electronic, repetitive beats, synthetic textures, and minimalistic chord progressions.",
+    "Trance": "Uses layered synths, driving rhythms, and euphoric chord progressions with gradual builds and breakdowns.",
+    "Ambient": "Focuses on atmospheric textures, minimalistic progressions, and slow-evolving rhythms.",
+    "Ska": "Combines Caribbean influences with jazz and R&B elements, featuring off-beat rhythms and simple progressions.",
+    "Gospel": "Characterized by uplifting chord progressions, strong vocal harmonies, and a soulful, expressive rhythm.",
+    "World": "Incorporates diverse instruments and scales from various cultures, with unique rhythmic patterns and modal progressions.",
+    "K-Pop": "Features a blend of pop, hip hop, and electronic elements with catchy hooks and polished, modern chord progressions.",
+    "J-Pop": "Often includes bright melodies, eclectic influences, and polished production with standard pop progressions.",
+    "EDM": "Utilizes electronic synthesizers, repetitive beats, and build-drop structures with energetic progressions.",
+    "Indie": "Characterized by a mix of traditional and experimental sounds, often featuring unconventional chord progressions and rhythms.",
+    "Alternative": "Blends elements from various genres with varied chord progressions and eclectic rhythmic patterns."
+}
+
 def main():
     st.title("AI MIDI Generator")
 
-    # Place the input form in the sidebar
     st.sidebar.header("Song Details")
-    genre = st.sidebar.text_input("Genre", value="Pop")
+    # Use a selectbox for Genre with predefined mainstream genres
+    genre_options = list(genre_extra_details.keys())
+    genre = st.sidebar.selectbox("Genre", options=genre_options, index=genre_options.index("Pop"))
+    
     tempo = st.sidebar.number_input("Tempo (BPM)", min_value=50, max_value=300, value=120)
     key_center = st.sidebar.selectbox("Key", options=["C", "D", "E", "F", "G", "A", "B"])
     scale_type = st.sidebar.selectbox("Scale Type", options=["major", "minor"])
@@ -95,11 +130,15 @@ def main():
         options=["1/4", "1/8", "1/16", "3/4", "6/8"],
         index=0
     )
+    
+    # Retrieve extra details based on the selected genre.
+    # This information is used only for MIDI generation and not displayed in the UI.
+    extra_details = genre_extra_details.get(genre, "")
 
-    # Define the prompt template for generating MIDI code with consistency checks
+    # Define the prompt template for generating MIDI code with the additional genre details.
     midi_prompt = PromptTemplate(
         input_variables=[
-            "genre", "tempo", "key_center", "scale_type", "mood",
+            "genre", "extra_details", "tempo", "key_center", "scale_type", "mood",
             "parts_info", "additional_details", "measure_count", "beat_subdivision"
         ],
         template="""
@@ -118,6 +157,7 @@ Use MEASURE_TICKS consistently across all instrument parts.
 
 Details:
 - Genre: {genre}
+- Extra Genre Details: {extra_details}
 - Tempo (BPM): {tempo}
 - Key: {key_center}
 - Scale: {scale_type}
@@ -141,7 +181,7 @@ Requirements:
 Output only the complete Python code (without markdown code fences).
 """
     )
-
+    
     # Initialize ChatOpenAI
     llm = ChatOpenAI(
         model_name="gpt-4o",
@@ -155,6 +195,7 @@ Output only the complete Python code (without markdown code fences).
         with st.spinner("Generating MIDI code..."):
             generated_code = chain.run({
                 "genre": genre,
+                "extra_details": extra_details,
                 "tempo": tempo,
                 "key_center": key_center,
                 "scale_type": scale_type,
@@ -165,7 +206,7 @@ Output only the complete Python code (without markdown code fences).
                 "beat_subdivision": beat_subdivision
             })
         
-        # Display generated code in an expandable/collapsible section
+        # Display generated code in an expandable section
         with st.expander("View Generated Code"):
             st.code(generated_code, language="python")
         
