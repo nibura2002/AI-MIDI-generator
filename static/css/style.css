@@ -1,0 +1,79 @@
+body {
+    font-family: 'Noto Sans', sans-serif;
+    background-color: #ECEFF1;
+    color: #37474F;
+    margin: 0;
+    padding: 0;
+  }
+  .container {
+    display: flex;
+    min-height: 100vh;
+  }
+  .sidebar {
+    width: 300px;
+    background-color: #CFD8DC;
+    padding: 20px;
+    box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+  }
+  .main-content {
+    flex: 1;
+    padding: 20px;
+  }
+  h1, h2, h3 {
+    color: #455A64;
+  }
+  label {
+    font-weight: bold;
+    display: block;
+    margin-top: 10px;
+  }
+  input, select, textarea, button {
+    width: 100%;
+    padding: 8px;
+    margin-top: 5px;
+    margin-bottom: 15px;
+    border: 1px solid #B0BEC5;
+    border-radius: 4px;
+    box-sizing: border-box;
+    font-size: 1em;
+  }
+  button {
+    background-color: #607D8B;
+    color: #ECEFF1;
+    border: none;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+  }
+  button:hover {
+    background-color: #455A64;
+  }
+  .flash-messages ul {
+    list-style: none;
+    padding: 0;
+  }
+  .flash-messages li {
+    padding: 10px;
+    margin-bottom: 10px;
+    border: 1px solid #B0BEC5;
+    background-color: #CFD8DC;
+  }
+  .code-block {
+    background-color: #CFD8DC;
+    border: 1px solid #B0BEC5;
+    padding: 15px;
+    overflow-x: auto;
+    white-space: pre;
+    border-radius: 4px;
+  }
+  .download-btn {
+    display: inline-block;
+    background-color: #607D8B;
+    color: #ECEFF1;
+    padding: 10px 20px;
+    text-decoration: none;
+    border-radius: 4px;
+    transition: background-color 0.3s ease;
+  }
+  .download-btn:hover {
+    background-color: #455A64;
+  }

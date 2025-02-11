@@ -1,22 +1,29 @@
 import os
 import re
-import streamlit as st
-import subprocess
 import tempfile
-import base64
+import subprocess
 import mido
+
 from dotenv import load_dotenv
+from flask import Flask, request, send_file, render_template, redirect, url_for, flash
+
+# LangChain & OpenAI imports
 from langchain_openai import ChatOpenAI
 from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
-import streamlit.components.v1 as components
 
-# Load environment variables from the .env file
+###############################################################################
+# Load environment variables & check for OpenAI key
+###############################################################################
 load_dotenv()
-
 openai_api_key = os.getenv("OPENAI_API_KEY")
 if not openai_api_key:
-    st.error("OPENAI_API_KEY is not set. Please set it in the .env file.")
+    raise EnvironmentError(
+        "OPENAI_API_KEY is not set. Please set it in the .env file.")
+
+###############################################################################
+# Utility functions
+###############################################################################
 
 
 def strip_markdown_code(text: str) -> str:
@@ -35,12 +42,6 @@ def get_midi_info(
         user_measure_count: int) -> str:
     """
     Parse the MIDI file using mido and return a human-friendly summary.
-    The summary includes:
-      - The user-specified tempo and measure count.
-      - The actual tempo from the first set_tempo message (if available).
-      - The total length in seconds.
-      - The number of tracks (interpreted as parts).
-      - For each track, the count of note on/off events and a preview of the first few messages.
     """
     try:
         mid = mido.MidiFile(midi_path)
@@ -59,26 +60,25 @@ def get_midi_info(
         info_text += f"User Specified Number of Measures: {user_measure_count}\n"
         info_text += f"Total Length: {mid.length:.2f} seconds\n"
         info_text += f"Number of Tracks (Parts): {len(mid.tracks)}\n\n"
-
         for i, track in enumerate(mid.tracks):
             track_name = getattr(track, "name", "") or f"Part {i + 1}"
-            info_text += f"{track_name}:\n"
             note_on_count = sum(1 for msg in track if msg.type == "note_on")
             note_off_count = sum(1 for msg in track if msg.type == "note_off")
+            info_text += f"{track_name}:\n"
             info_text += f"  Note On events: {note_on_count}\n"
             info_text += f"  Note Off events: {note_off_count}\n"
             info_text += "  Preview messages:\n"
-            for msg in track[:5]:
-                info_text += f"    {msg}\n"
+            for preview_msg in track[:5]:
+                info_text += f"    {preview_msg}\n"
             info_text += "\n"
         return info_text
     except Exception as e:
         return f"Error reading MIDI file information: {e}"
 
 
-# Define a dictionary of genres and their additional details for MIDI generation.
-# These details are used only when generating the MIDI and not displayed
-# on the UI.
+###############################################################################
+# Genre extra details
+###############################################################################
 genre_extra_details = {
     "Pop": "Typically features catchy melodies, simple chord progressions like I-V-vi-IV, and a clear, danceable rhythm.",
     "Rock": "Often uses power chords, a strong backbeat, and progressions such as I-IV-V. Electric guitar and drums are prominent.",
@@ -110,63 +110,22 @@ genre_extra_details = {
     "Indie": "Characterized by a mix of traditional and experimental sounds, often featuring unconventional chord progressions and rhythms.",
     "Alternative": "Blends elements from various genres with varied chord progressions and eclectic rhythmic patterns."}
 
+###############################################################################
+# Flask App Initialization
+###############################################################################
+app = Flask(__name__)
+app.secret_key = "replace_with_a_secure_random_key"  # Replace for production
 
-def main():
-    st.title("AI MIDI Generator")
-    st.markdown(
-        """
-        This app generates MIDI file based on a song description.
-        You can specify the genre, tempo, key, scale type, mood, and other details to customize the song.
-        """
-    )
+# Initialize the LLM
+llm = ChatOpenAI(model_name="gpt-4o", openai_api_key=openai_api_key)
 
-    st.sidebar.header("Song Details")
-    # Use a selectbox for Genre with predefined mainstream genres
-    genre_options = list(genre_extra_details.keys())
-    genre = st.sidebar.selectbox(
-        "Genre",
-        options=genre_options,
-        index=genre_options.index("Pop"))
-
-    tempo = st.sidebar.number_input(
-        "Tempo (BPM)",
-        min_value=50,
-        max_value=300,
-        value=120)
-    key_center = st.sidebar.selectbox(
-        "Key", options=[
-            "C", "D", "E", "F", "G", "A", "B"])
-    scale_type = st.sidebar.selectbox("Scale Type", options=["major", "minor"])
-    mood = st.sidebar.text_input("Mood", value="Bright and upbeat")
-    parts_info = st.sidebar.text_area(
-        "Parts Information",
-        value="1) Piano for chords\n2) Bass for rhythm\n3) Drums for beat"
-    )
-    additional_details = st.sidebar.text_area(
-        "Additional Details",
-        value="Provide any additional details as needed."
-    )
-    measure_count = st.sidebar.number_input(
-        "Number of Measures", min_value=1, max_value=100, value=16)
-    beat_subdivision = st.sidebar.selectbox(
-        "Main Beat Subdivision",
-        options=["1/4", "1/8", "1/16", "3/4", "6/8"],
-        index=0
-    )
-
-    # Retrieve extra details based on the selected genre.
-    # This information is used only for MIDI generation and not displayed in
-    # the UI.
-    extra_details = genre_extra_details.get(genre, "")
-
-    # Define the prompt template. We've added a requirement to maintain coherent rhythmic feel
-    # across all parts (no unintentional mismatches).
-    midi_prompt = PromptTemplate(
-        input_variables=[
-            "genre", "extra_details", "tempo", "key_center", "scale_type", "mood",
-            "parts_info", "additional_details", "measure_count", "beat_subdivision"
-        ],
-        template="""
+# Define the PromptTemplate for MIDI generation
+midi_prompt = PromptTemplate(
+    input_variables=[
+        "genre", "extra_details", "tempo", "key_center", "scale_type", "mood",
+        "parts_info", "additional_details", "measure_count", "beat_subdivision"
+    ],
+    template="""
 You are an excellent musician and Python programmer.
 Based on the following song description, generate a complete Python code that uses the mido library to create a MIDI file.
 All instrument parts must adhere to the same time signature. Compute the measure duration as follows:
@@ -198,11 +157,10 @@ Requirements:
 4. Create a new MIDI file.
 5. Set the tempo using the provided BPM.
 6. Create MIDI tracks for each instrument part (for example, piano, bass, and drums).
-   For each instrument, create a new MidiTrack (e.g., piano_track = MidiTrack()) and append messages to that track.
+   For each instrument, create a new MidiTrack and append messages to that track.
    Do not append individual MetaMessage objects directly to the file.
 7. Use consistent rhythmic subdivisions for all instruments so the overall feel is coherent.
-   If using syncopations, make sure they align within each measure so the groove is tight.
-8. Use distinct channels and program changes for each track so that different instruments are recognized:
+8. Use distinct channels and program changes for each track so that different instruments are recognized.
    - For example, channel 0 with program=0 for piano, channel 1 with program=32 for bass, and channel 9 for drums.
    - Insert a 'program_change' message at the beginning of each track for non-drum instruments.
    - For the drum track, simply set the channel to 9 (GM standard for percussion).
@@ -211,20 +169,51 @@ Requirements:
 
 Output only the complete Python code (without markdown code fences).
 """
-    )
+)
 
-    # Initialize ChatOpenAI
-    llm = ChatOpenAI(
-        model_name="gpt-4o",
-        openai_api_key=openai_api_key,
-    )
+###############################################################################
+# Routes & Handlers
+###############################################################################
 
-    # Set up the LLMChain with the prompt template
-    chain = LLMChain(llm=llm, prompt=midi_prompt)
 
-    if st.sidebar.button("Generate & Execute MIDI Code"):
-        with st.spinner("Generating MIDI code..."):
-            generated_code = chain.run({
+@app.route("/", methods=["GET", "POST"])
+def index():
+    # Default values
+    default_genre = "Pop"
+    default_tempo = 120
+    default_key = "C"
+    default_scale_type = "major"
+    default_mood = "Bright and upbeat"
+    default_parts_info = "1) Piano for chords\n2) Bass for rhythm\n3) Drums for beat"
+    default_additional_details = "Provide any additional details as needed."
+    default_measure_count = 16
+    default_beat_subdivision = "1/4"
+
+    genre_options = list(genre_extra_details.keys())
+
+    if request.method == "POST":
+        # Gather input from form
+        genre = request.form.get("genre", default_genre)
+        tempo = int(request.form.get("tempo", default_tempo))
+        key_center = request.form.get("key_center", default_key)
+        scale_type = request.form.get("scale_type", default_scale_type)
+        mood = request.form.get("mood", default_mood)
+        parts_info = request.form.get("parts_info", default_parts_info)
+        additional_details = request.form.get(
+            "additional_details", default_additional_details)
+        measure_count = int(
+            request.form.get(
+                "measure_count",
+                default_measure_count))
+        beat_subdivision = request.form.get(
+            "beat_subdivision", default_beat_subdivision)
+
+        extra_details = genre_extra_details.get(genre, "")
+
+        # Run the LLM chain to generate the Python MIDI code
+        chain = LLMChain(llm=llm, prompt=midi_prompt)
+        try:
+            generated_code_raw = chain.run({
                 "genre": genre,
                 "extra_details": extra_details,
                 "tempo": tempo,
@@ -236,52 +225,74 @@ Output only the complete Python code (without markdown code fences).
                 "measure_count": measure_count,
                 "beat_subdivision": beat_subdivision
             })
+        except Exception as e:
+            flash(f"Error while calling LLM chain: {str(e)}", "error")
+            return redirect(url_for("index"))
 
-        # Display generated code in an expandable section
-        with st.expander("View Generated Code"):
-            st.code(generated_code, language="python")
+        generated_code = strip_markdown_code(generated_code_raw)
 
-        # Remove markdown code fences if present
-        cleaned_code = strip_markdown_code(generated_code)
-
-        # Write the cleaned code to a temporary file and execute it
+        # Write the generated code to a temporary file and execute it
         with tempfile.NamedTemporaryFile(delete=False, suffix=".py") as tmp_file:
-            tmp_file.write(cleaned_code.encode("utf-8"))
+            tmp_file.write(generated_code.encode("utf-8"))
             tmp_file_name = tmp_file.name
 
-        try:
-            output = subprocess.check_output(
-                ["python", tmp_file_name], stderr=subprocess.STDOUT)
-            st.success("MIDI code executed successfully.")
-            st.write("Execution Output:")
-            st.text(output.decode("utf-8"))
-        except subprocess.CalledProcessError as e:
-            st.error("An error occurred while executing the code.")
-            st.text(e.output.decode("utf-8"))
-            return
+        execution_output = ""
+        midi_file_path = "output.mid"
 
-        # Check if the MIDI file was generated and offer it for download
-        midi_file = "output.mid"
-        if os.path.exists(midi_file):
-            with open(midi_file, "rb") as f:
-                midi_data = f.read()
-            st.download_button(
-                label="Download Generated MIDI File",
-                data=midi_data,
-                file_name="output.mid",
-                mime="audio/midi"
-            )
-            # Display a human-friendly summary of the MIDI file information
+        try:
+            out = subprocess.check_output(
+                ["python", tmp_file_name], stderr=subprocess.STDOUT)
+            execution_output = out.decode("utf-8")
+        except subprocess.CalledProcessError as e:
+            execution_output = e.output.decode("utf-8")
+            flash("An error occurred while executing the generated code.", "error")
+
+        midi_info = ""
+        if os.path.exists(midi_file_path):
             midi_info = get_midi_info(
-                midi_file,
+                midi_file_path,
                 user_tempo=tempo,
                 user_measure_count=measure_count)
-            st.subheader("MIDI File Information")
-            st.text_area("Details", value=midi_info, height=300)
-        else:
-            st.error(
-                "MIDI file 'output.mid' was not found. Please check the generated code.")
+
+        return render_template(
+            "result.html",
+            generated_code=generated_code,
+            execution_output=execution_output,
+            midi_exists=os.path.exists(midi_file_path),
+            midi_info=midi_info
+        )
+    return render_template(
+        "index.html",
+        genre_options=genre_options,
+        default_genre=default_genre,
+        default_tempo=default_tempo,
+        default_key=default_key,
+        default_scale_type=default_scale_type,
+        default_mood=default_mood,
+        default_parts_info=default_parts_info,
+        default_additional_details=default_additional_details,
+        default_measure_count=default_measure_count,
+        default_beat_subdivision=default_beat_subdivision
+    )
 
 
+@app.route("/download_midi")
+def download_midi():
+    midi_file_path = "output.mid"
+    if os.path.exists(midi_file_path):
+        return send_file(
+            midi_file_path,
+            as_attachment=True,
+            download_name="output.mid",
+            mimetype="audio/midi"
+        )
+    else:
+        flash("No MIDI file found.", "error")
+        return redirect(url_for("index"))
+
+
+###############################################################################
+# Run the Flask App
+###############################################################################
 if __name__ == "__main__":
-    main()
+    app.run(host="0.0.0.0", port=5001, debug=True)
