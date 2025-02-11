@@ -17,6 +17,7 @@ autopep8 = "^2.3.2"
 langchain-openai = "^0.3.4"
 midi2audio = "^0.1.1"
 flask = "^3.1.0"
+gunicorn = "^23.0.0"
 
 
 [build-system]
