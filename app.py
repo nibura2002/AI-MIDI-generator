@@ -135,7 +135,8 @@ def main():
     # This information is used only for MIDI generation and not displayed in the UI.
     extra_details = genre_extra_details.get(genre, "")
 
-    # Define the prompt template for generating MIDI code with the additional genre details.
+    # Define the prompt template. We've added a requirement to maintain coherent rhythmic feel
+    # across all parts (no unintentional mismatches).
     midi_prompt = PromptTemplate(
         input_variables=[
             "genre", "extra_details", "tempo", "key_center", "scale_type", "mood",
@@ -152,8 +153,7 @@ All instrument parts must adhere to the same time signature. Compute the measure
     - If the value is "6/8", assume 3 beats per measure (since 6 eighth notes equal 3 quarter notes).
     - For values like "1/8" or "1/16", default to 4 beats per measure.
 - Calculate MEASURE_TICKS = TICKS_PER_BEAT * (number of beats per measure).
-Ensure that for every measure, the sum of note durations for each instrument equals MEASURE_TICKS.
-Use MEASURE_TICKS consistently across all instrument parts.
+- Ensure that all instrument patterns align properly with each measure to create a cohesive groove (avoid mismatched feels).
 
 Details:
 - Genre: {genre}
@@ -174,9 +174,16 @@ Requirements:
 4. Create a new MIDI file.
 5. Set the tempo using the provided BPM.
 6. Create MIDI tracks for each instrument part (for example, piano, bass, and drums).
-   For each instrument, create a new MidiTrack (e.g., piano_track = MidiTrack()) and append messages to that track. Do not append individual MetaMessage objects directly to the file.
-7. For each instrument, insert note events so that the total duration in each measure equals MEASURE_TICKS.
-8. Save the MIDI file as "output.mid".
+   For each instrument, create a new MidiTrack (e.g., piano_track = MidiTrack()) and append messages to that track. 
+   Do not append individual MetaMessage objects directly to the file.
+7. Use consistent rhythmic subdivisions for all instruments so the overall feel is coherent. 
+   If using syncopations, make sure they align within each measure so the groove is tight.
+8. Use distinct channels and program changes for each track so that different instruments are recognized:
+   - For example, channel 0 with program=0 for piano, channel 1 with program=32 for bass, and channel 9 for drums.
+   - Insert a 'program_change' message at the beginning of each track for non-drum instruments.
+   - For the drum track, simply set the channel to 9 (GM standard for percussion).
+9. For each instrument, insert note events so that the total duration in each measure equals MEASURE_TICKS.
+10. Save the MIDI file as "output.mid".
 
 Output only the complete Python code (without markdown code fences).
 """
