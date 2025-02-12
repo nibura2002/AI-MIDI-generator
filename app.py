@@ -29,12 +29,15 @@ load_dotenv()
 openai_api_key = os.getenv("OPENAI_API_KEY")
 if not openai_api_key:
     logger.error("OPENAI_API_KEY is not set. Please set it in the .env file.")
-    raise EnvironmentError("OPENAI_API_KEY is not set. Please set it in the .env file.")
+    raise EnvironmentError(
+        "OPENAI_API_KEY is not set. Please set it in the .env file.")
 logger.info("OPENAI_API_KEY successfully loaded.")
 
 ###############################################################################
 # Utility functions
 ###############################################################################
+
+
 def strip_markdown_code(text: str) -> str:
     """
     Remove markdown code fences from the text.
@@ -44,7 +47,11 @@ def strip_markdown_code(text: str) -> str:
     text = re.sub(r"\n```$", "", text)
     return text
 
-def get_midi_info(midi_path: str, user_tempo: int, user_measure_count: int) -> str:
+
+def get_midi_info(
+        midi_path: str,
+        user_tempo: int,
+        user_measure_count: int) -> str:
     """
     Parse the MIDI file using mido and return a human-friendly summary.
     """
@@ -66,7 +73,7 @@ def get_midi_info(midi_path: str, user_tempo: int, user_measure_count: int) -> s
         info_text += f"Total Length: {mid.length:.2f} seconds\n"
         info_text += f"Number of Tracks (Parts): {len(mid.tracks)}\n\n"
         for i, track in enumerate(mid.tracks):
-            track_name = getattr(track, "name", "") or f"Part {i+1}"
+            track_name = getattr(track, "name", "") or f"Part {i + 1}"
             note_on_count = sum(1 for msg in track if msg.type == "note_on")
             note_off_count = sum(1 for msg in track if msg.type == "note_off")
             info_text += f"{track_name}:\n"
@@ -80,6 +87,7 @@ def get_midi_info(midi_path: str, user_tempo: int, user_measure_count: int) -> s
     except Exception as e:
         logger.error("Error reading MIDI file: %s", e)
         return f"Error reading MIDI file information: {e}"
+
 
 ###############################################################################
 # Genre extra details
@@ -113,17 +121,36 @@ genre_extra_details = {
     "J-Pop": "Often includes bright melodies, eclectic influences, and polished production with standard pop progressions.",
     "EDM": "Utilizes electronic synthesizers, repetitive beats, and build-drop structures with energetic progressions.",
     "Indie": "Characterized by a mix of traditional and experimental sounds, often featuring unconventional chord progressions and rhythms.",
-    "Alternative": "Blends elements from various genres with varied chord progressions and eclectic rhythmic patterns."
-}
+    "Alternative": "Blends elements from various genres with varied chord progressions and eclectic rhythmic patterns."}
 
 ###############################################################################
 # Flask App Initialization (Production Settings)
 ###############################################################################
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "replace_with_a_secure_random_key")
+app.secret_key = os.environ.get(
+    "FLASK_SECRET_KEY",
+    "replace_with_a_secure_random_key")
 app.config['ENV'] = 'production'
 app.config['DEBUG'] = False
 app.config['TESTING'] = False
+
+# Redirect requests from www.midigenerator.dtmerforum.com to
+# midigenerator.dtmerforum.com
+
+
+@app.before_request
+def redirect_to_www():
+    host = request.headers.get("Host", "")
+
+    # ローカル環境の場合はリダイレクトをスキップする
+    if "localhost" in host or "127.0.0.1" in host:
+        return None
+
+    # www で始まっていない場合、www付きにリダイレクトする
+    if not host.startswith("www."):
+        target_url = request.url.replace(host, "www." + host, 1)
+        return redirect(target_url, code=301)
+
 
 ###############################################################################
 # Initialize the LLM and PromptTemplate for MIDI generation
@@ -184,6 +211,8 @@ Output only the complete Python code (without markdown code fences).
 ###############################################################################
 # Routes & Handlers
 ###############################################################################
+
+
 @app.route("/", methods=["GET", "POST"])
 def index():
     # Default values
@@ -210,15 +239,24 @@ def index():
         scale_type = request.form.get("scale_type", default_scale_type)
         mood = request.form.get("mood", default_mood)
         parts_info = request.form.get("parts_info", default_parts_info)
-        additional_details = request.form.get("additional_details", default_additional_details)
+        additional_details = request.form.get(
+            "additional_details", default_additional_details)
         try:
-            measure_count = int(request.form.get("measure_count", default_measure_count))
+            measure_count = int(
+                request.form.get(
+                    "measure_count",
+                    default_measure_count))
         except ValueError:
             measure_count = default_measure_count
-        beat_subdivision = request.form.get("beat_subdivision", default_beat_subdivision)
+        beat_subdivision = request.form.get(
+            "beat_subdivision", default_beat_subdivision)
 
         extra_details = genre_extra_details.get(genre, "")
-        logger.info("Received POST request with genre=%s, tempo=%d, key=%s", genre, tempo, key_center)
+        logger.info(
+            "Received POST request with genre=%s, tempo=%d, key=%s",
+            genre,
+            tempo,
+            key_center)
 
         # Run the LLM chain to generate the Python MIDI code
         chain = LLMChain(llm=llm, prompt=midi_prompt)
@@ -242,7 +280,9 @@ def index():
             return redirect(url_for("index"))
 
         generated_code = strip_markdown_code(generated_code_raw)
-        logger.info("Generated code length: %d characters", len(generated_code))
+        logger.info(
+            "Generated code length: %d characters",
+            len(generated_code))
 
         # Write the generated code to a temporary file and execute it
         with tempfile.NamedTemporaryFile(delete=False, suffix=".py") as tmp_file:
@@ -254,17 +294,23 @@ def index():
         midi_file_path = "output.mid"
 
         try:
-            out = subprocess.check_output(["python", tmp_file_name], stderr=subprocess.STDOUT)
+            out = subprocess.check_output(
+                ["python", tmp_file_name], stderr=subprocess.STDOUT)
             execution_output = out.decode("utf-8")
             logger.info("Execution output: %s", execution_output)
         except subprocess.CalledProcessError as e:
             execution_output = e.output.decode("utf-8")
-            logger.error("Error executing generated code: %s", execution_output)
+            logger.error(
+                "Error executing generated code: %s",
+                execution_output)
             flash("An error occurred while executing the generated code.", "error")
 
         midi_info = ""
         if os.path.exists(midi_file_path):
-            midi_info = get_midi_info(midi_file_path, user_tempo=tempo, user_measure_count=measure_count)
+            midi_info = get_midi_info(
+                midi_file_path,
+                user_tempo=tempo,
+                user_measure_count=measure_count)
             logger.info("MIDI file generated successfully.")
         else:
             logger.error("MIDI file was not generated.")
@@ -290,6 +336,7 @@ def index():
         default_beat_subdivision=default_beat_subdivision
     )
 
+
 @app.route("/download_midi")
 def download_midi():
     midi_file_path = "output.mid"
@@ -306,10 +353,17 @@ def download_midi():
         flash("No MIDI file found.", "error")
         return redirect(url_for("index"))
 
+
 ###############################################################################
 # Run the Flask App
 ###############################################################################
 if __name__ == "__main__":
     # In production, it is recommended to run with a WSGI server such as Gunicorn.
     # For example: gunicorn -w 4 -b :$PORT app:app
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)), debug=False)
+    app.run(
+        host="0.0.0.0",
+        port=int(
+            os.environ.get(
+                "PORT",
+                8080)),
+        debug=False)
