@@ -77,3 +77,26 @@ body {
   .download-btn:hover {
     background-color: #455A64;
   }
+
+/* Parts configuration用のスタイル */
+.parts-configuration {
+  border: 1px solid #ccc;
+  padding: 15px;
+  margin-top: 20px;
+  background-color: #f9f9f9;
+}
+
+.parts-configuration h3 {
+  margin-top: 0;
+}
+
+.part-section {
+  margin-bottom: 15px;
+  padding-left: 15px;
+  border-left: 2px solid #ddd;
+}
+
+.part-section h4 {
+  margin: 5px 0;
+  font-size: 1.1em;
+}  
