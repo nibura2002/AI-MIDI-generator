@@ -5,12 +5,51 @@
   <title>AI MIDI Generator (Flask)</title>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans&display=swap" rel="stylesheet">
   <link rel="stylesheet" type="text/css" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    /* Parts configuration用のスタイル */
+    .parts-configuration {
+      border: 1px solid #ccc;
+      padding: 15px;
+      margin-top: 20px;
+      background-color: #f9f9f9;
+    }
+    .parts-configuration h3 {
+      margin-top: 0;
+    }
+    .part-section {
+      margin-bottom: 15px;
+      padding-left: 15px;
+      border-left: 2px solid #ddd;
+    }
+    .part-section h4 {
+      margin: 5px 0;
+      font-size: 1.1em;
+    }
+  </style>
+  <script>
+    // 選択されたパート数に応じて各パートの入力フィールドを表示／非表示にする関数
+    function updateParts() {
+      var numParts = parseInt(document.getElementById("num_parts").value);
+      for (var i = 1; i <= 8; i++) {
+        var partDiv = document.getElementById("part_section_" + i);
+        if (i <= numParts) {
+          partDiv.style.display = "block";
+        } else {
+          partDiv.style.display = "none";
+        }
+      }
+    }
+    window.onload = function() {
+      updateParts();
+    }
+  </script>
 </head>
 <body>
   <div class="container">
     <div class="sidebar">
       <h2>Song Details</h2>
       <form method="POST">
+          <!-- 既存の各種フォーム項目 -->
           <label>Genre:</label>
           <select name="genre">
               {% for g in genre_options %}
@@ -33,8 +72,49 @@
           </select>
           <label>Mood:</label>
           <input type="text" name="mood" value="{{ default_mood }}">
-          <label>Parts Information:</label>
-          <textarea name="parts_info" rows="3">{{ default_parts_info }}</textarea>
+          
+          <!-- Parts configurationのグループ -->
+          <div class="parts-configuration">
+            <h3>Parts Configuration</h3>
+            <label for="num_parts">Number of Parts:</label>
+            <select name="num_parts" id="num_parts" onchange="updateParts()">
+                {% for n in range(1, 9) %}
+                    <option value="{{ n }}" {% if n == 3 %}selected{% endif %}>{{ n }}</option>
+                {% endfor %}
+            </select>
+            
+            <div id="partsContainer">
+              {% for i in range(1, 9) %}
+              <div class="part-section" id="part_section_{{ i }}">
+                  <h4>Part {{ i }}</h4>
+                  <label for="part{{ i }}_instrument">Instrument:</label>
+                  <select name="part{{ i }}_instrument" id="part{{ i }}_instrument">
+                      <option value="">-- Select an instrument --</option>
+                      {% if i == 3 %}
+                        <!-- Part 3 は「Drums」を初期値として設定 -->
+                        <option value="Drums" selected>Drums</option>
+                      {% endif %}
+                      {% for instrument in midi_instruments %}
+                          {% if not (i == 3 and instrument == "Drums") %}
+                          <option value="{{ instrument }}"
+                          {% if i == 1 and instrument == "Acoustic Grand Piano" %}
+                              selected
+                          {% elif i == 2 and instrument == "Acoustic Bass" %}
+                              selected
+                          {% endif %}>
+                              {{ instrument }}
+                          </option>
+                          {% endif %}
+                      {% endfor %}
+                  </select>
+                  <label for="part{{ i }}_usecase">Use Case:</label>
+                  <input type="text" name="part{{ i }}_usecase" id="part{{ i }}_usecase" placeholder="Describe the use case"
+                  value="{% if i == 1 %}Piano for chords{% elif i == 2 %}Bass for rhythm{% elif i == 3 %}Drums for beat{% endif %}">
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          
           <label>Additional Details:</label>
           <textarea name="additional_details" rows="3">{{ default_additional_details }}</textarea>
           <label>Number of Measures:</label>
@@ -45,6 +125,7 @@
                   <option value="{{ subdiv }}" {% if subdiv == default_beat_subdivision %}selected{% endif %}>{{ subdiv }}</option>
               {% endfor %}
           </select>
+          
           <button type="submit">Generate & Execute MIDI Code</button>
       </form>
       <div class="flash-messages">

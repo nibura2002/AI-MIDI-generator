@@ -29,15 +29,12 @@ load_dotenv()
 openai_api_key = os.getenv("OPENAI_API_KEY")
 if not openai_api_key:
     logger.error("OPENAI_API_KEY is not set. Please set it in the .env file.")
-    raise EnvironmentError(
-        "OPENAI_API_KEY is not set. Please set it in the .env file.")
+    raise EnvironmentError("OPENAI_API_KEY is not set. Please set it in the .env file.")
 logger.info("OPENAI_API_KEY successfully loaded.")
 
 ###############################################################################
 # Utility functions
 ###############################################################################
-
-
 def strip_markdown_code(text: str) -> str:
     """
     Remove markdown code fences from the text.
@@ -47,11 +44,7 @@ def strip_markdown_code(text: str) -> str:
     text = re.sub(r"\n```$", "", text)
     return text
 
-
-def get_midi_info(
-        midi_path: str,
-        user_tempo: int,
-        user_measure_count: int) -> str:
+def get_midi_info(midi_path: str, user_tempo: int, user_measure_count: int) -> str:
     """
     Parse the MIDI file using mido and return a human-friendly summary.
     """
@@ -88,7 +81,6 @@ def get_midi_info(
         logger.error("Error reading MIDI file: %s", e)
         return f"Error reading MIDI file information: {e}"
 
-
 ###############################################################################
 # Genre extra details
 ###############################################################################
@@ -121,36 +113,112 @@ genre_extra_details = {
     "J-Pop": "Often includes bright melodies, eclectic influences, and polished production with standard pop progressions.",
     "EDM": "Utilizes electronic synthesizers, repetitive beats, and build-drop structures with energetic progressions.",
     "Indie": "Characterized by a mix of traditional and experimental sounds, often featuring unconventional chord progressions and rhythms.",
-    "Alternative": "Blends elements from various genres with varied chord progressions and eclectic rhythmic patterns."}
+    "Alternative": "Blends elements from various genres with varied chord progressions and eclectic rhythmic patterns."
+}
 
 ###############################################################################
-# Flask App Initialization (Production Settings)
+# List of MIDI Instrument Options for Dropdown Menus
+###############################################################################
+midi_instruments = [
+    "Acoustic Grand Piano",
+    "Bright Acoustic Piano",
+    "Electric Grand Piano",
+    "Honky-tonk Piano",
+    "Electric Piano 1",
+    "Electric Piano 2",
+    "Harpsichord",
+    "Clavinet",
+    "Celesta",
+    "Glockenspiel",
+    "Music Box",
+    "Vibraphone",
+    "Marimba",
+    "Xylophone",
+    "Tubular Bells",
+    "Dulcimer",
+    "Drawbar Organ",
+    "Percussive Organ",
+    "Rock Organ",
+    "Church Organ",
+    "Reed Organ",
+    "Accordion",
+    "Harmonica",
+    "Tango Accordion",
+    "Acoustic Guitar (nylon)",
+    "Acoustic Guitar (steel)",
+    "Electric Guitar (jazz)",
+    "Electric Guitar (clean)",
+    "Electric Guitar (muted)",
+    "Overdriven Guitar",
+    "Distortion Guitar",
+    "Guitar Harmonics",
+    "Acoustic Bass",
+    "Electric Bass (finger)",
+    "Electric Bass (pick)",
+    "Fretless Bass",
+    "Slap Bass 1",
+    "Slap Bass 2",
+    "Synth Bass 1",
+    "Synth Bass 2",
+    "Violin",
+    "Viola",
+    "Cello",
+    "Contrabass",
+    "Tremolo Strings",
+    "Pizzicato Strings",
+    "Orchestral Harp",
+    "Timpani",
+    "String Ensemble 1",
+    "String Ensemble 2",
+    "SynthStrings 1",
+    "SynthStrings 2",
+    "Choir Aahs",
+    "Voice Oohs",
+    "Synth Voice",
+    "Orchestra Hit",
+    "Trumpet",
+    "Trombone",
+    "Tuba",
+    "Muted Trumpet",
+    "French Horn",
+    "Brass Section",
+    "Synth Brass 1",
+    "Synth Brass 2",
+    "Soprano Sax",
+    "Alto Sax",
+    "Tenor Sax",
+    "Baritone Sax",
+    "Oboe",
+    "English Horn",
+    "Bassoon",
+    "Clarinet",
+    "Piccolo",
+    "Flute",
+    "Recorder",
+    "Pan Flute",
+    "Blown Bottle",
+    "Shakuhachi",
+    "Whistle",
+    "Ocarina"
+]
+
+###############################################################################
+# Flask App Initialization
 ###############################################################################
 app = Flask(__name__)
-app.secret_key = os.environ.get(
-    "FLASK_SECRET_KEY",
-    "replace_with_a_secure_random_key")
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "replace_with_a_secure_random_key")
 app.config['ENV'] = 'production'
 app.config['DEBUG'] = False
 app.config['TESTING'] = False
 
-# Redirect requests from www.midigenerator.dtmerforum.com to
-# midigenerator.dtmerforum.com
-
-
 @app.before_request
 def redirect_to_www():
     host = request.headers.get("Host", "")
-
-    # ローカル環境の場合はリダイレクトをスキップする
     if "localhost" in host or "127.0.0.1" in host:
         return None
-
-    # www で始まっていない場合、www付きにリダイレクトする
     if not host.startswith("www."):
         target_url = request.url.replace(host, "www." + host, 1)
         return redirect(target_url, code=301)
-
 
 ###############################################################################
 # Initialize the LLM and PromptTemplate for MIDI generation
@@ -193,7 +261,7 @@ Requirements:
 3. Determine the number of beats per measure based on the "Main Beat Subdivision" as described above, and calculate MEASURE_TICKS.
 4. Create a new MIDI file.
 5. Set the tempo using the provided BPM.
-6. Create MIDI tracks for each instrument part (for example, piano, bass, and drums).
+6. Create MIDI tracks for each instrument part.
    For each instrument, create a new MidiTrack and append messages to that track.
    Do not append individual MetaMessage objects directly to the file.
 7. Use consistent rhythmic subdivisions for all instruments so the overall feel is coherent.
@@ -211,17 +279,16 @@ Output only the complete Python code (without markdown code fences).
 ###############################################################################
 # Routes & Handlers
 ###############################################################################
-
-
 @app.route("/", methods=["GET", "POST"])
 def index():
-    # Default values
+    # Default values for non-part fields
     default_genre = "Pop"
     default_tempo = 120
     default_key = "C"
     default_scale_type = "major"
     default_mood = "Bright and upbeat"
-    default_parts_info = "1) Piano for chords\n2) Bass for rhythm\n3) Drums for beat"
+    # For backward compatibility with the previous "parts_info" field
+    default_parts_info = ""
     default_additional_details = "Provide any additional details as needed."
     default_measure_count = 16
     default_beat_subdivision = "1/4"
@@ -238,25 +305,29 @@ def index():
         key_center = request.form.get("key_center", default_key)
         scale_type = request.form.get("scale_type", default_scale_type)
         mood = request.form.get("mood", default_mood)
-        parts_info = request.form.get("parts_info", default_parts_info)
-        additional_details = request.form.get(
-            "additional_details", default_additional_details)
+        additional_details = request.form.get("additional_details", default_additional_details)
         try:
-            measure_count = int(
-                request.form.get(
-                    "measure_count",
-                    default_measure_count))
+            measure_count = int(request.form.get("measure_count", default_measure_count))
         except ValueError:
             measure_count = default_measure_count
-        beat_subdivision = request.form.get(
-            "beat_subdivision", default_beat_subdivision)
+        beat_subdivision = request.form.get("beat_subdivision", default_beat_subdivision)
+
+        # Process parts information:
+        # First try to get individual part fields (dropdown + free text)
+        parts = []
+        for i in range(1, 9):
+            instrument = request.form.get(f"part{i}_instrument", "").strip()
+            usecase = request.form.get(f"part{i}_usecase", "").strip()
+            if instrument or usecase:
+                parts.append(f"Part {i}: Instrument: {instrument}, Use case: {usecase}")
+        # If no individual parts were provided, fallback to a single "parts_info" field if present.
+        if parts:
+            parts_info = "\n".join(parts)
+        else:
+            parts_info = request.form.get("parts_info", default_parts_info)
 
         extra_details = genre_extra_details.get(genre, "")
-        logger.info(
-            "Received POST request with genre=%s, tempo=%d, key=%s",
-            genre,
-            tempo,
-            key_center)
+        logger.info("Received POST request with genre=%s, tempo=%d, key=%s", genre, tempo, key_center)
 
         # Run the LLM chain to generate the Python MIDI code
         chain = LLMChain(llm=llm, prompt=midi_prompt)
@@ -280,9 +351,7 @@ def index():
             return redirect(url_for("index"))
 
         generated_code = strip_markdown_code(generated_code_raw)
-        logger.info(
-            "Generated code length: %d characters",
-            len(generated_code))
+        logger.info("Generated code length: %d characters", len(generated_code))
 
         # Write the generated code to a temporary file and execute it
         with tempfile.NamedTemporaryFile(delete=False, suffix=".py") as tmp_file:
@@ -294,76 +363,57 @@ def index():
         midi_file_path = "output.mid"
 
         try:
-            out = subprocess.check_output(
-                ["python", tmp_file_name], stderr=subprocess.STDOUT)
+            out = subprocess.check_output(["python", tmp_file_name], stderr=subprocess.STDOUT)
             execution_output = out.decode("utf-8")
             logger.info("Execution output: %s", execution_output)
         except subprocess.CalledProcessError as e:
             execution_output = e.output.decode("utf-8")
-            logger.error(
-                "Error executing generated code: %s",
-                execution_output)
+            logger.error("Error executing generated code: %s", execution_output)
             flash("An error occurred while executing the generated code.", "error")
 
         midi_info = ""
         if os.path.exists(midi_file_path):
-            midi_info = get_midi_info(
-                midi_file_path,
-                user_tempo=tempo,
-                user_measure_count=measure_count)
+            midi_info = get_midi_info(midi_file_path, user_tempo=tempo, user_measure_count=measure_count)
             logger.info("MIDI file generated successfully.")
         else:
             logger.error("MIDI file was not generated.")
 
-        return render_template(
-            "result.html",
-            generated_code=generated_code,
-            execution_output=execution_output,
-            midi_exists=os.path.exists(midi_file_path),
-            midi_info=midi_info
-        )
-    return render_template(
-        "index.html",
-        genre_options=genre_options,
-        default_genre=default_genre,
-        default_tempo=default_tempo,
-        default_key=default_key,
-        default_scale_type=default_scale_type,
-        default_mood=default_mood,
-        default_parts_info=default_parts_info,
-        default_additional_details=default_additional_details,
-        default_measure_count=default_measure_count,
-        default_beat_subdivision=default_beat_subdivision
-    )
-
+        return render_template("result.html",
+                               generated_code=generated_code,
+                               execution_output=execution_output,
+                               midi_exists=os.path.exists(midi_file_path),
+                               midi_info=midi_info)
+    return render_template("index.html",
+                           genre_options=genre_options,
+                           default_genre=default_genre,
+                           default_tempo=default_tempo,
+                           default_key=default_key,
+                           default_scale_type=default_scale_type,
+                           default_mood=default_mood,
+                           default_parts_info=default_parts_info,
+                           default_additional_details=default_additional_details,
+                           default_measure_count=default_measure_count,
+                           default_beat_subdivision=default_beat_subdivision,
+                           midi_instruments=midi_instruments)
 
 @app.route("/download_midi")
 def download_midi():
     midi_file_path = "output.mid"
     if os.path.exists(midi_file_path):
         logger.info("Providing MIDI file for download.")
-        return send_file(
-            midi_file_path,
-            as_attachment=True,
-            download_name="output.mid",
-            mimetype="audio/midi"
-        )
+        return send_file(midi_file_path,
+                         as_attachment=True,
+                         download_name="output.mid",
+                         mimetype="audio/midi")
     else:
         logger.error("No MIDI file found for download.")
         flash("No MIDI file found.", "error")
         return redirect(url_for("index"))
 
-
 ###############################################################################
 # Run the Flask App
 ###############################################################################
 if __name__ == "__main__":
-    # In production, it is recommended to run with a WSGI server such as Gunicorn.
-    # For example: gunicorn -w 4 -b :$PORT app:app
-    app.run(
-        host="0.0.0.0",
-        port=int(
-            os.environ.get(
-                "PORT",
-                8080)),
-        debug=False)
+    app.run(host="0.0.0.0",
+            port=int(os.environ.get("PORT", 8080)),
+            debug=False)
