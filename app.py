@@ -117,90 +117,20 @@ genre_extra_details = {
 }
 
 ###############################################################################
-# List of MIDI Instrument Options for Dropdown Menus
+# List of MIDI Instrument Options for Dropdown Menus (Simplified with Categories)
 ###############################################################################
-midi_instruments = [
-    "Acoustic Grand Piano",
-    "Bright Acoustic Piano",
-    "Electric Grand Piano",
-    "Honky-tonk Piano",
-    "Electric Piano 1",
-    "Electric Piano 2",
-    "Harpsichord",
-    "Clavinet",
-    "Celesta",
-    "Glockenspiel",
-    "Music Box",
-    "Vibraphone",
-    "Marimba",
-    "Xylophone",
-    "Tubular Bells",
-    "Dulcimer",
-    "Drawbar Organ",
-    "Percussive Organ",
-    "Rock Organ",
-    "Church Organ",
-    "Reed Organ",
-    "Accordion",
-    "Harmonica",
-    "Tango Accordion",
-    "Acoustic Guitar (nylon)",
-    "Acoustic Guitar (steel)",
-    "Electric Guitar (jazz)",
-    "Electric Guitar (clean)",
-    "Electric Guitar (muted)",
-    "Overdriven Guitar",
-    "Distortion Guitar",
-    "Guitar Harmonics",
-    "Acoustic Bass",
-    "Electric Bass (finger)",
-    "Electric Bass (pick)",
-    "Fretless Bass",
-    "Slap Bass 1",
-    "Slap Bass 2",
-    "Synth Bass 1",
-    "Synth Bass 2",
-    "Violin",
-    "Viola",
-    "Cello",
-    "Contrabass",
-    "Tremolo Strings",
-    "Pizzicato Strings",
-    "Orchestral Harp",
-    "Timpani",
-    "String Ensemble 1",
-    "String Ensemble 2",
-    "SynthStrings 1",
-    "SynthStrings 2",
-    "Choir Aahs",
-    "Voice Oohs",
-    "Synth Voice",
-    "Orchestra Hit",
-    "Trumpet",
-    "Trombone",
-    "Tuba",
-    "Muted Trumpet",
-    "French Horn",
-    "Brass Section",
-    "Synth Brass 1",
-    "Synth Brass 2",
-    "Soprano Sax",
-    "Alto Sax",
-    "Tenor Sax",
-    "Baritone Sax",
-    "Oboe",
-    "English Horn",
-    "Bassoon",
-    "Clarinet",
-    "Piccolo",
-    "Flute",
-    "Recorder",
-    "Pan Flute",
-    "Blown Bottle",
-    "Shakuhachi",
-    "Whistle",
-    "Ocarina"
-]
+midi_instruments_by_category = {
+    "Piano": ["Acoustic Grand Piano"],
+    "Electric Piano": ["Electric Grand Piano"],
+    "Organ": ["Drawbar Organ", "Church Organ"],
+    "Guitar": ["Electric Guitar", "Acoustic Guitar"],
+    "Bass": ["Acoustic Bass", "Electric Bass"],
+    "Strings": ["String Ensemble"],
+    "Synth": ["Synth Lead", "Synth Pad"],
+    "Percussion": ["Drums", "Synth Drums", "Other Percussion"],
+    "Brass": ["Trumpet", "French Horn"],
+    "Woodwind": ["Clarinet", "Flute"]
+}
 
 ###############################################################################
 # Flask App Initialization
@@ -223,6 +153,9 @@ def redirect_to_www():
 ###############################################################################
 # Initialize the LLM and PromptTemplate for MIDI generation
 ###############################################################################
+# Updated prompt: If a part's use-case description contains "コード" or "chord",
+# generate code that plays chords (multiple simultaneous notes) for that instrument.
+# Additionally, adjust note durations so that the total duration exactly matches the specified number of measures.
 llm = ChatOpenAI(model_name="gpt-4o", openai_api_key=openai_api_key)
 
 midi_prompt = PromptTemplate(
@@ -241,7 +174,11 @@ All instrument parts must adhere to the same time signature. Compute the measure
     - If the value is "6/8", assume 3 beats per measure (since 6 eighth notes equal 3 quarter notes).
     - For values like "1/8" or "1/16", default to 4 beats per measure.
 - Calculate MEASURE_TICKS = TICKS_PER_BEAT * (number of beats per measure).
-- Ensure that all instrument patterns align properly with each measure to create a cohesive groove (avoid mismatched feels).
+- Ensure that all instrument patterns align properly with each measure to create a cohesive groove.
+- Adjust note durations so that the sum of note durations exactly matches the total duration for the specified number of measures.
+
+Additional Requirement:
+For any instrument part, if its use-case description (provided in the Parts Information) contains the word "コード" or "chord" (indicating that the instrument should play chords rather than single notes), then generate code that plays chords (multiple notes simultaneously) for that instrument.
 
 Details:
 - Genre: {genre}
@@ -270,7 +207,8 @@ Requirements:
    - Insert a 'program_change' message at the beginning of each track for non-drum instruments.
    - For the drum track, simply set the channel to 9 (GM standard for percussion).
 9. For each instrument, insert note events so that the total duration in each measure equals MEASURE_TICKS.
-10. Save the MIDI file as "output.mid".
+10. Adjust note durations if necessary so that the entire song exactly spans the specified number of measures.
+11. Save the MIDI file as "output.mid".
 
 Output only the complete Python code (without markdown code fences).
 """
@@ -287,7 +225,6 @@ def index():
     default_key = "C"
     default_scale_type = "major"
     default_mood = "Bright and upbeat"
-    # For backward compatibility with the previous "parts_info" field
     default_parts_info = ""
     default_additional_details = "Provide any additional details as needed."
     default_measure_count = 16
@@ -312,15 +249,12 @@ def index():
             measure_count = default_measure_count
         beat_subdivision = request.form.get("beat_subdivision", default_beat_subdivision)
 
-        # Process parts information:
-        # First try to get individual part fields (dropdown + free text)
+        # Process parts information: now only instrument selection is used.
         parts = []
         for i in range(1, 9):
             instrument = request.form.get(f"part{i}_instrument", "").strip()
-            usecase = request.form.get(f"part{i}_usecase", "").strip()
-            if instrument or usecase:
-                parts.append(f"Part {i}: Instrument: {instrument}, Use case: {usecase}")
-        # If no individual parts were provided, fallback to a single "parts_info" field if present.
+            if instrument:
+                parts.append(f"Part {i}: Instrument: {instrument}")
         if parts:
             parts_info = "\n".join(parts)
         else:
@@ -394,7 +328,7 @@ def index():
                            default_additional_details=default_additional_details,
                            default_measure_count=default_measure_count,
                            default_beat_subdivision=default_beat_subdivision,
-                           midi_instruments=midi_instruments)
+                           midi_instruments_by_category=midi_instruments_by_category)
 
 @app.route("/download_midi")
 def download_midi():
