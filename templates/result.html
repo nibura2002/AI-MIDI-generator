@@ -40,6 +40,8 @@
         </div>
         <div class="main-content">
             <h1>AI MIDI Generator - Results</h1>
+            <!-- 生成されたコードと実行結果を表示 -->
+            <!-- ユーザーに開示不要のためコメントアウト
             <h2>Generated Code</h2>
             <button onclick="toggleVisibility('codeBlock')">View / Hide Code</button>
             <div id="codeBlock" class="code-block" style="display:none;">
@@ -51,6 +53,7 @@
                 {{ execution_output }}
             </div>
             {% endif %}
+            -->
             {% if midi_exists %}
             <h3>MIDI File Information</h3>
             <textarea rows="10" readonly>{{ midi_info }}</textarea>
