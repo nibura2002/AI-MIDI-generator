@@ -153,10 +153,12 @@ def redirect_to_www():
 ###############################################################################
 # Initialize the LLM and PromptTemplate for MIDI generation
 ###############################################################################
-# Updated prompt: If a part's use-case description contains "コード" or "chord",
-# generate code that plays chords (multiple simultaneous notes) for that instrument.
-# Additionally, adjust note durations so that the total duration exactly matches the specified number of measures.
-llm = ChatOpenAI(model_name="gpt-4o", openai_api_key=openai_api_key)
+# Updated prompt:
+# 1. If a part's use-case description contains "コード" or "chord", generate code that plays chords.
+# 2. For all non-percussion instruments, use a unified chord progression.
+# 3. Adjust note durations so the entire song spans exactly the specified number of measures.
+# 4. For Bass instruments, play only the root note (single note) instead of chords.
+llm = ChatOpenAI(model_name="o3-mini", openai_api_key=openai_api_key)
 
 midi_prompt = PromptTemplate(
     input_variables=[
@@ -177,8 +179,11 @@ All instrument parts must adhere to the same time signature. Compute the measure
 - Ensure that all instrument patterns align properly with each measure to create a cohesive groove.
 - Adjust note durations so that the sum of note durations exactly matches the total duration for the specified number of measures.
 
-Additional Requirement:
-For any instrument part, if its use-case description (provided in the Parts Information) contains the word "コード" or "chord" (indicating that the instrument should play chords rather than single notes), then generate code that plays chords (multiple notes simultaneously) for that instrument.
+Additional Requirements:
+1. For any instrument part whose use-case description (provided in Parts Information) contains "コード" or "chord", generate code that plays chords (multiple simultaneous notes).
+2. For all non-percussion instrument parts, use a unified chord progression (the same set of chords across these instruments).
+3. For Bass instruments (e.g., "Acoustic Bass" or "Electric Bass"), generate code that plays only the root note (a single note) rather than chords.
+4. Adjust note durations if necessary so that the entire song exactly spans the specified number of measures.
 
 Details:
 - Genre: {genre}
